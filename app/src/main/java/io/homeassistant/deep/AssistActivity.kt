@@ -2,20 +2,22 @@ package io.homeassistant.deep
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +44,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -49,9 +52,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,126 +72,10 @@ import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.google.accompanist.permissions.shouldShowRationale
-import com.tinder.scarlet.WebSocket
-import io.homeassistant.deep.ui.theme.HomeAssistantDeepIntegrationTheme
-
-data class AssistMessage(val content: String, val isUserMessage: Boolean)
-class ConversationViewModel(
-    url: String,
-    private val authToken: String,
-    private val assistPipeline: String,
-    private val onResponse: (String) -> Unit
-) {
-    private val TAG = "ConversationViewModel"
-
-    private var service = socketServiceFactory(url)
-
-    private var id = 1
-    private var conversationId: String? = null
-
-    fun observeConnection() {
-        _connectionStatus = ConnectionStatus.CONNECTING
-        service.observeConnection().subscribe({ response ->
-            when (response) {
-                is WebSocket.Event.OnConnectionOpened<*> -> _connectionStatus =
-                    (ConnectionStatus.AUTHENTICATING)
-
-                is WebSocket.Event.OnConnectionClosed -> _connectionStatus =
-                    (ConnectionStatus.CLOSED)
-
-                is WebSocket.Event.OnConnectionClosing -> _connectionStatus =
-                    (ConnectionStatus.CLOSING)
-
-                is WebSocket.Event.OnConnectionFailed -> _connectionStatus =
-                    (ConnectionStatus.FAILED)
-
-                is WebSocket.Event.OnMessageReceived -> {
-                    Log.d(TAG, response.message.toString())
-                }
-            }
-        }, { error ->
-            error.localizedMessage?.let { Log.e(TAG, it) }
-        })
-        service.observeMessages().subscribe({ message ->
-            Log.d(TAG, message.toString())
-
-            when (message) {
-                is AuthRequiredSocketMessage -> {
-                    service.sendMessage(AuthSocketMessage(this@ConversationViewModel.authToken))
-                }
-
-                is AuthOkSocketMessage -> {
-                    _connectionStatus = ConnectionStatus.OPENED
-                }
-
-                is AuthInvalidSocketMessage -> {
-                    _connectionStatus = ConnectionStatus.AUTHENTICATION_FAILED
-                }
-
-                is EventSocketMessage -> {
-                    when (message.event) {
-                        is IntentEndEvent -> {
-                            conversationId = message.event.data.intentOutput.conversationId
-                            _messages.add(
-                                AssistMessage(
-                                    message.event.data.intentOutput.response.speech.plain.speech,
-                                    false
-                                )
-                            )
-                            _responding--
-                            onResponse(message.event.data.intentOutput.response.speech.plain.speech)
-                        }
-
-                        is UnknownEvent -> {
-                            Log.w(TAG, "Unknown event received")
-                        }
-                    }
-                }
-
-                is UnknownSocketMessage -> {
-                    Log.w(TAG, "Unknown message type received")
-                }
-
-                else -> {}
-            }
-        }, { error ->
-            error.localizedMessage?.let { Log.e(TAG, it) }
-        })
-    }
-
-    private var _connectionStatus by mutableStateOf(ConnectionStatus.NOT_STARTED)
-    val connectionStatus: ConnectionStatus
-        get() = _connectionStatus
-
-    private val _messages = mutableStateListOf<AssistMessage>()
-    val messages: List<AssistMessage>
-        get() = _messages
-
-    private var _responding by mutableStateOf(0)
-    val responding: Int
-        get() = _responding
-
-    fun sendMessage(content: String) {
-        _messages.add(AssistMessage(content, true))
-        _responding++
-        service.sendMessage(
-            AssistPipelineRunSocketMessage(
-                id = id++,
-                startStage = "intent",
-                endStage = "intent",
-                input = AssistPipelineRunSocketMessage.Input(text = content),
-                pipeline = assistPipeline,
-                conversationId = conversationId
-            )
-        )
-        Log.d(TAG, "Sent message: $content")
-    }
-
-    init {
-        observeConnection()
-    }
-}
+import io.homeassistant.deep.shared.AssistMessage
+import io.homeassistant.deep.shared.ConnectionStatus
+import io.homeassistant.deep.shared.ConversationViewModel
+import io.homeassistant.deep.ui.theme.AppTheme
 
 class AssistActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -197,7 +84,7 @@ class AssistActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            HomeAssistantDeepIntegrationTheme {
+            AppTheme {
                 ModalBottomSheet(
                     onDismissRequest = { this.finish() },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -216,26 +103,21 @@ class AssistActivity : ComponentActivity() {
                             context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
 
                         val tts = TextToSpeech(context) {}
-                        // DisposableEffect(Unit) {
-                        //     onDispose {
-                        //         tts.shutdown()
-                        //     }
-                        // }
+                        DisposableEffect(Unit) {
+                            onDispose {
+                                tts.shutdown()
+                            }
+                        }
 
                         val conversation = remember {
-                            ConversationViewModel(
-                                sharedPreferences.getString("url", "") ?: "",
+                            ConversationViewModel(sharedPreferences.getString("url", "") ?: "",
                                 sharedPreferences.getString("auth_token", "") ?: "",
                                 sharedPreferences.getString("assist_pipeline", "") ?: "",
                                 onResponse = { response ->
                                     tts.speak(
-                                        response,
-                                        TextToSpeech.QUEUE_FLUSH,
-                                        null,
-                                        "utteranceId"
+                                        response, TextToSpeech.QUEUE_FLUSH, null, "utteranceId"
                                     )
-                                }
-                            )
+                                })
                         }
 
                         when (conversation.connectionStatus) {
@@ -315,6 +197,16 @@ fun Loading(text: String = "Loading...") {
     }
 }
 
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun LoadingPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            Loading()
+        }
+    }
+}
+
 @Composable
 fun Failed(
     text: String = "Failed to connect", conversation: ConversationViewModel, onCancel: () -> Unit
@@ -335,33 +227,110 @@ fun Failed(
     }
 }
 
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun FailedPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            Failed(conversation = ConversationViewModel("", "", "", onResponse = {}), onCancel = {})
+        }
+    }
+}
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun InputRow(
     onSend: (String) -> Unit, modifier: Modifier = Modifier
 ) {
-    var input by remember { mutableStateOf("") }
-    val focusRequester = remember { FocusRequester() }
+    RequiresPermission(permission = android.Manifest.permission.RECORD_AUDIO) { isMicrophoneGranted, requestMicrophonePermission ->
+        var voice by remember { mutableStateOf(isMicrophoneGranted) }
 
-    val microphonePermissionState = rememberPermissionState(
-        android.Manifest.permission.RECORD_AUDIO
-    )
-    var voice by remember { mutableStateOf(microphonePermissionState.status.isGranted) }
+        if (voice) {
+            VoiceInputRow(isMicrophoneGranted, onSend, modifier, deactivateVoice = {
+                voice = false
+            }, requestMicrophonePermission)
+        } else {
+            TextInputRow(modifier, onSend, activateVoice = {
+                voice = true
+            })
+        }
+    }
+}
 
-    if (voice) {
-        var listening by remember { mutableStateOf(false) }
+@Composable
+fun VoiceInputRowContent(
+    recognizedText: String,
+    listening: Boolean,
+    startListening: () -> Unit,
+    stopListening: () -> Unit,
+    onDeactivateVoice: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 8.dp),
+        ) {
+            Text(
+                recognizedText,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .imePadding(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Spacer(modifier = Modifier.width(48.dp))
+            if (listening) {
+                PulsingIconButton(onClick = stopListening) {
+                    Icon(Icons.Default.Face, contentDescription = null)
+                }
+            } else {
+                FilledTonalIconButton(onClick = startListening) {
+                    Icon(Icons.Default.Face, contentDescription = null)
+                }
+            }
+            IconButton(onClick = onDeactivateVoice) {
+                Icon(Icons.Default.Close, contentDescription = null)
+            }
+        }
+    }
+}
 
-        if (microphonePermissionState.status.isGranted) {
-            var recognizedText by remember { mutableStateOf("") }
-            val context = LocalContext.current
-            val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+@Composable
+fun VoiceInputRow(
+    isMicrophoneGranted: Boolean,
+    onSend: (String) -> Unit,
+    modifier: Modifier,
+    deactivateVoice: () -> Unit,
+    requestMicrophonePermission: () -> Unit
+) {
+    var listening by remember { mutableStateOf(false) }
+
+    if (isMicrophoneGranted) {
+        var recognizedText by remember { mutableStateOf("") }
+        val context = LocalContext.current
+        val speechRecognizer = remember { SpeechRecognizer.createSpeechRecognizer(context) }
+        val intent = remember {
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(
                     RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                 )
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en_GB")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-GB")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
-            val recognitionListener = object : RecognitionListener {
+        }
+
+        DisposableEffect(speechRecognizer) {
+            val listener = object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
                     listening = true
                 }
@@ -370,7 +339,7 @@ fun InputRow(
                     recognizedText = ""
                 }
 
-                override fun onRmsChanged(p0: Float) {}
+                override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
                     listening = false
@@ -398,123 +367,154 @@ fun InputRow(
 
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             }
-            speechRecognizer.setRecognitionListener(recognitionListener)
 
-            Row(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
-            ) {
-                Text(
-                    recognizedText, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
-                )
-            }
-            Row(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .imePadding(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(modifier = Modifier.width(48.dp))
-                if (listening) {
-                    PulsingIconButton(onClick = {
-                        speechRecognizer.stopListening()
-                    }) {
-                        Icon(Icons.Default.Face, contentDescription = null)
-                    }
-                } else {
-                    FilledTonalIconButton(onClick = {
-                        speechRecognizer.startListening(intent)
-                    }) {
-                        Icon(Icons.Default.Face, contentDescription = null)
-                    }
-                }
-                IconButton(onClick = {
-                    speechRecognizer.stopListening()
-                    speechRecognizer.destroy()
-                    voice = false
-                }) {
-                    Icon(Icons.Default.Close, contentDescription = null)
-                }
-            }
+            speechRecognizer.setRecognitionListener(listener)
+            speechRecognizer.startListening(intent)
 
-
-            LaunchedEffect(Unit) {
-                speechRecognizer.startListening(intent)
-            }
-            // DisposableEffect(Unit) {
-            //     onDispose {
-            //         speechRecognizer.stopListening()
-            //         speechRecognizer.destroy()
-            //     }
-            // }
-        } else {
-            Column {
-                val textToShow = if (microphonePermissionState.status.shouldShowRationale) {
-                    // If the user has denied the permission but the rationale can be shown,
-                    // then gently explain why the app requires this permission
-                    "The microphone is important for this app. Please grant the permission."
-                } else {
-                    // If it's the first time the user lands on this feature, or the user
-                    // doesn't want to be asked again for this permission, explain that the
-                    // permission is required
-                    "Microphone permission required for this feature to be available. " + "Please grant the permission"
-                }
-                Text(textToShow)
-                Button(onClick = { microphonePermissionState.launchPermissionRequest() }) {
-                    Text("Request permission")
-                }
+            onDispose {
+                speechRecognizer.stopListening()
+                speechRecognizer.destroy()
             }
         }
-    } else {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = {
-                    input = it
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-                label = { Text("Enter a request") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = {
-                    if (input.isEmpty()) return@KeyboardActions
-                    val message = input
-                    input = ""
-                    onSend(message)
-                })
-            )
-            if (input.isNotEmpty()) {
-                FilledIconButton(onClick = {
-                    if (input.isEmpty()) return@FilledIconButton
-                    val message = input
-                    input = ""
-                    onSend(message)
-                }) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
-                }
-            } else {
-                FilledIconButton(modifier = Modifier.padding(bottom = 4.dp), onClick = {
-                    voice = true
-                }) {
-                    Icon(Icons.Default.Face, contentDescription = null)
-                }
-            }
 
-            LaunchedEffect(Unit) {
-                focusRequester.requestFocus()
+        VoiceInputRowContent(
+            recognizedText = recognizedText,
+            listening = listening,
+            startListening = { speechRecognizer.startListening(intent) },
+            stopListening = { speechRecognizer.stopListening() },
+            onDeactivateVoice = {
+                speechRecognizer.stopListening()
+                speechRecognizer.destroy()
+                deactivateVoice()
+            },
+            modifier = modifier
+        )
+    } else {
+        Column {
+            Text("Microphone permission required for this feature to be available. Please grant the permission.")
+            Button(onClick = requestMicrophonePermission) {
+                Text("Request permission")
             }
         }
     }
+}
+
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun VoiceInputRowPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            VoiceInputRowContent(recognizedText = "",
+                listening = false,
+                startListening = {},
+                stopListening = {},
+                onDeactivateVoice = {})
+        }
+    }
+}
+
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun VoiceInputRowListeningPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            VoiceInputRowContent(recognizedText = "Hello",
+                listening = true,
+                startListening = {},
+                stopListening = {},
+                onDeactivateVoice = {})
+        }
+    }
+}
+
+// @Preview(uiMode = UI_MODE_NIGHT_YES)
+// @Composable
+// fun VoiceInputRowWithoutPermissionPreview() {
+//     AppTheme {
+//         Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+//             VoiceInputRow(isMicrophoneGranted = false,
+//                 onSend = {},
+//                 modifier = Modifier,
+//                 deactivateVoice = {},
+//                 requestMicrophonePermission = {})
+//         }
+//     }
+// }
+
+@Composable
+private fun TextInputRow(
+    modifier: Modifier,
+    onSend: (String) -> Unit,
+    activateVoice: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        OutlinedTextField(value = input,
+            onValueChange = {
+                input = it
+            },
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester),
+            label = { Text("Enter a request") },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = {
+                if (input.isEmpty()) return@KeyboardActions
+                val message = input
+                input = ""
+                onSend(message)
+            })
+        )
+        if (input.isNotEmpty()) {
+            FilledIconButton(onClick = {
+                if (input.isEmpty()) return@FilledIconButton
+                val message = input
+                input = ""
+                onSend(message)
+            }) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+            }
+        } else {
+            FilledIconButton(modifier = Modifier.padding(bottom = 4.dp), onClick = activateVoice) {
+                Icon(Icons.Default.Face, contentDescription = null)
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+        }
+    }
+}
+
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun TextInputRowPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            TextInputRow(modifier = Modifier, onSend = {}, activateVoice = {})
+        }
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun RequiresPermission(
+    permission: String,
+    content: @Composable (isGranted: Boolean, requestPermission: () -> Unit) -> Unit
+) {
+    val permissionState = rememberPermissionState(
+        permission
+    )
+
+    content(permissionState.status.isGranted) { permissionState.launchPermissionRequest() }
 }
 
 @Composable
@@ -528,12 +528,43 @@ fun PulsingIconButton(
             repeatMode = RepeatMode.Reverse,
         ), label = "Pulse"
     )
+    val containerColor by infiniteTransition.animateColor(
+        initialValue = MaterialTheme.colorScheme.primary,
+        targetValue = MaterialTheme.colorScheme.tertiary,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500), repeatMode = RepeatMode.Reverse
+        ),
+        label = "ColorPulse"
+    )
+    val contentColor by infiniteTransition.animateColor(
+        initialValue = MaterialTheme.colorScheme.onPrimary,
+        targetValue = MaterialTheme.colorScheme.onTertiary,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500), repeatMode = RepeatMode.Reverse
+        ),
+        label = "ColorPulse"
+    )
 
     FilledIconButton(
         onClick = onClick,
         modifier = modifier.scale(scale),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = containerColor, contentColor = contentColor
+        )
     ) {
         content()
+    }
+}
+
+@Preview(uiMode = UI_MODE_NIGHT_YES)
+@Composable
+fun PulsingIconButtonPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            PulsingIconButton(onClick = {}) {
+                Icon(Icons.Default.Face, contentDescription = null)
+            }
+        }
     }
 }
 
@@ -588,16 +619,18 @@ fun RespondingMessageBubble() {
     }
 }
 
-@Preview(showBackground = true)
+@Preview(uiMode = UI_MODE_NIGHT_YES)
 @Composable
-fun MessageBubblePreview() {
-    HomeAssistantDeepIntegrationTheme {
-        Column(
-            modifier = Modifier.padding(vertical = 4.dp)
-        ) {
-            MessageBubble(AssistMessage(content = "Hello", isUserMessage = true))
-            MessageBubble(AssistMessage(content = "How can I help you?", isUserMessage = false))
-            RespondingMessageBubble()
+fun MessageBubblesPreview() {
+    AppTheme {
+        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                MessageBubble(AssistMessage(content = "Hello", isUserMessage = true))
+                MessageBubble(AssistMessage(content = "How can I help you?", isUserMessage = false))
+                RespondingMessageBubble()
+            }
         }
     }
 }

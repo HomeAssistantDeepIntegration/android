@@ -1,4 +1,4 @@
-package io.homeassistant.deep
+package io.homeassistant.deep.shared
 
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json

@@ -2,6 +2,7 @@ package io.homeassistant.deep
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,28 +32,50 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import io.homeassistant.deep.ui.theme.HomeAssistantDeepIntegrationTheme
+import com.google.android.gms.wearable.PutDataMapRequest
+import com.google.android.gms.wearable.Wearable
+import io.homeassistant.deep.ui.theme.AppTheme
 
 class ConfigActivity : ComponentActivity() {
+    private fun saveAndSendSettings(url: String, authToken: String, assistPipeline: String) {
+        val sharedPreferences = getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+        with(sharedPreferences.edit()) {
+            putString("url", url)
+            putString("auth_token", authToken)
+            putString("assist_pipeline", assistPipeline)
+            apply()
+        }
+
+        val dataClient = Wearable.getDataClient(this)
+        with(PutDataMapRequest.create("/config")) {
+            setUrgent()
+            dataMap.putString("url", url)
+            dataMap.putString("auth_token", authToken)
+            dataMap.putString("assist_pipeline", assistPipeline)
+            dataClient.putDataItem(asPutDataRequest()).addOnSuccessListener {
+                Log.d("ConfigActivity", "Successfully sent config")
+            }.addOnFailureListener {
+                Log.d("ConfigActivity", "Failed to send config")
+            }
+        }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
-            HomeAssistantDeepIntegrationTheme {
+            AppTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(
-                            title = { Text("My Screen") },
-                            navigationIcon = {
-                                IconButton(onClick = {
-                                    finish()
-                                }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                                }
+                        TopAppBar(title = { Text("Configure") }, navigationIcon = {
+                            IconButton(onClick = {
+                                finish()
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                             }
-                        )
+                        })
                     }, modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
                     val context = LocalContext.current
@@ -78,91 +101,67 @@ class ConfigActivity : ComponentActivity() {
 
                     Column(modifier = Modifier.padding(innerPadding)) {
                         Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth()
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth()
                         ) {
-                            OutlinedTextField(
-                                value = url,
+                            OutlinedTextField(value = url,
                                 onValueChange = { url = it },
                                 label = { Text("URL") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .onFocusChanged { focusState ->
                                         if (!focusState.isFocused) {
-                                            with(sharedPreferences.edit()) {
-                                                putString("url", url)
-                                                apply()
-                                            }
+                                            saveAndSendSettings(url, authToken, assistPipeline)
                                         }
                                     },
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        with(sharedPreferences.edit()) {
-                                            putString("url", url)
-                                            apply()
-                                        }
-                                        focusManager.clearFocus()
-                                    }
-                                )
-                            )
+                                keyboardActions = KeyboardActions(onDone = {
+                                    saveAndSendSettings(url, authToken, assistPipeline)
+                                    focusManager.clearFocus()
+                                }))
                         }
                         Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth()
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth()
                         ) {
-                            OutlinedTextField(
-                                value = authToken,
+                            OutlinedTextField(value = authToken,
                                 onValueChange = { authToken = it },
                                 label = { Text("Authentication Token") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .onFocusChanged { focusState ->
                                         if (!focusState.isFocused) {
-                                            with(sharedPreferences.edit()) {
-                                                putString("auth_token", authToken)
-                                                apply()
-                                            }
+                                            saveAndSendSettings(url, authToken, assistPipeline)
                                         }
                                     },
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        with(sharedPreferences.edit()) {
-                                            putString("auth_token", authToken)
-                                            apply()
-                                        }
-                                        focusManager.clearFocus()
-                                    }
-                                )
-                            )
+                                keyboardActions = KeyboardActions(onDone = {
+                                    saveAndSendSettings(url, authToken, assistPipeline)
+                                    focusManager.clearFocus()
+                                }))
                         }
                         Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth()
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth()
                         ) {
-                            OutlinedTextField(
-                                value = assistPipeline,
+                            OutlinedTextField(value = assistPipeline,
                                 onValueChange = { assistPipeline = it },
                                 label = { Text("Assist Pipeline") },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .onFocusChanged { focusState ->
                                         if (!focusState.isFocused) {
-                                            with(sharedPreferences.edit()) {
-                                                putString("assist_pipeline", assistPipeline)
-                                                apply()
-                                            }
+                                            saveAndSendSettings(url, authToken, assistPipeline)
                                         }
                                     },
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        with(sharedPreferences.edit()) {
-                                            putString("assist_pipeline", assistPipeline)
-                                            apply()
-                                        }
-                                        focusManager.clearFocus()
-                                    }
-                                )
-                            )
+                                keyboardActions = KeyboardActions(onDone = {
+                                    saveAndSendSettings(url, authToken, assistPipeline)
+                                    focusManager.clearFocus()
+                                }))
                         }
                     }
                 }

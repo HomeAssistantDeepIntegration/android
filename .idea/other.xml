@@ -4,6 +4,55 @@
     <option name="deviceSelectionList">
       <list>
         <PersistentDeviceSelectionData>
+          <option name="api" value="33" />
+          <option name="brand" value="google" />
+          <option name="codename" value="felix_camera" />
+          <option name="id" value="felix_camera" />
+          <option name="manufacturer" value="Google" />
+          <option name="name" value="Pixel Fold (Camera-enabled)" />
+          <option name="screenDensity" value="420" />
+          <option name="screenX" value="2208" />
+          <option name="screenY" value="1840" />
+          <option name="selected" value="true" />
+        </PersistentDeviceSelectionData>
+        <PersistentDeviceSelectionData>
+          <option name="api" value="34" />
+          <option name="brand" value="google" />
+          <option name="codename" value="husky" />
+          <option name="id" value="husky" />
+          <option name="manufacturer" value="Google" />
+          <option name="name" value="Pixel 8 Pro" />
+          <option name="screenDensity" value="390" />
+          <option name="screenX" value="1008" />
+          <option name="screenY" value="2244" />
+          <option name="selected" value="true" />
+        </PersistentDeviceSelectionData>
+        <PersistentDeviceSelectionData>
+          <option name="api" value="30" />
+          <option name="brand" value="google" />
+          <option name="codename" value="r11" />
+          <option name="id" value="r11" />
+          <option name="manufacturer" value="Google" />
+          <option name="name" value="Pixel Watch" />
+          <option name="screenDensity" value="320" />
+          <option name="screenX" value="384" />
+          <option name="screenY" value="384" />
+          <option name="selected" value="true" />
+          <option name="type" value="WEAR_OS" />
+        </PersistentDeviceSelectionData>
+        <PersistentDeviceSelectionData>
+          <option name="api" value="33" />
+          <option name="brand" value="google" />
+          <option name="codename" value="tangorpro" />
+          <option name="id" value="tangorpro" />
+          <option name="manufacturer" value="Google" />
+          <option name="name" value="Pixel Tablet" />
+          <option name="screenDensity" value="320" />
+          <option name="screenX" value="1600" />
+          <option name="screenY" value="2560" />
+          <option name="selected" value="true" />
+        </PersistentDeviceSelectionData>
+        <PersistentDeviceSelectionData>
           <option name="api" value="27" />
           <option name="brand" value="DOCOMO" />
           <option name="codename" value="F01L" />
@@ -104,17 +153,6 @@
         </PersistentDeviceSelectionData>
         <PersistentDeviceSelectionData>
           <option name="api" value="33" />
-          <option name="brand" value="google" />
-          <option name="codename" value="felix_camera" />
-          <option name="id" value="felix_camera" />
-          <option name="manufacturer" value="Google" />
-          <option name="name" value="Pixel Fold (Camera-enabled)" />
-          <option name="screenDensity" value="420" />
-          <option name="screenX" value="2208" />
-          <option name="screenY" value="1840" />
-        </PersistentDeviceSelectionData>
-        <PersistentDeviceSelectionData>
-          <option name="api" value="33" />
           <option name="brand" value="samsung" />
           <option name="codename" value="gts8uwifi" />
           <option name="id" value="gts8uwifi" />
@@ -123,17 +161,6 @@
           <option name="screenDensity" value="320" />
           <option name="screenX" value="1848" />
           <option name="screenY" value="2960" />
-        </PersistentDeviceSelectionData>
-        <PersistentDeviceSelectionData>
-          <option name="api" value="34" />
-          <option name="brand" value="google" />
-          <option name="codename" value="husky" />
-          <option name="id" value="husky" />
-          <option name="manufacturer" value="Google" />
-          <option name="name" value="Pixel 8 Pro" />
-          <option name="screenDensity" value="390" />
-          <option name="screenX" value="1008" />
-          <option name="screenY" value="2244" />
         </PersistentDeviceSelectionData>
         <PersistentDeviceSelectionData>
           <option name="api" value="30" />
@@ -204,18 +231,6 @@
         <PersistentDeviceSelectionData>
           <option name="api" value="30" />
           <option name="brand" value="google" />
-          <option name="codename" value="r11" />
-          <option name="id" value="r11" />
-          <option name="manufacturer" value="Google" />
-          <option name="name" value="Pixel Watch" />
-          <option name="screenDensity" value="320" />
-          <option name="screenX" value="384" />
-          <option name="screenY" value="384" />
-          <option name="type" value="WEAR_OS" />
-        </PersistentDeviceSelectionData>
-        <PersistentDeviceSelectionData>
-          <option name="api" value="30" />
-          <option name="brand" value="google" />
           <option name="codename" value="redfin" />
           <option name="id" value="redfin" />
           <option name="manufacturer" value="Google" />
@@ -236,17 +251,6 @@
           <option name="screenY" value="2400" />
         </PersistentDeviceSelectionData>
         <PersistentDeviceSelectionData>
-          <option name="api" value="33" />
-          <option name="brand" value="google" />
-          <option name="codename" value="tangorpro" />
-          <option name="id" value="tangorpro" />
-          <option name="manufacturer" value="Google" />
-          <option name="name" value="Pixel Tablet" />
-          <option name="screenDensity" value="320" />
-          <option name="screenX" value="1600" />
-          <option name="screenY" value="2560" />
-        </PersistentDeviceSelectionData>
-        <PersistentDeviceSelectionData>
           <option name="api" value="29" />
           <option name="brand" value="samsung" />
           <option name="codename" value="x1q" />
@@ -259,5 +263,6 @@
         </PersistentDeviceSelectionData>
       </list>
     </option>
+    <option name="selectedCloudProject" value="cyanblue-club" />
   </component>
 </project>

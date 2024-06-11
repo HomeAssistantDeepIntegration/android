@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<role-config>
+    <string name="android.app.role.ASSIST">Assist</string>
+    <string name="android.app.role.ASSIST_DESCRIPTION">Your HomeAssistant Assist</string>
+</role-config>

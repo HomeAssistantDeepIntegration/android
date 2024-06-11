@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Home Assistant Deep Integration"
 include(":app")
- 
+include(":wear")
+include(":shared")

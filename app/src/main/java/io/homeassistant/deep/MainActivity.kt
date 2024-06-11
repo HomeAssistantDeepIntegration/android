@@ -2,6 +2,7 @@ package io.homeassistant.deep
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,78 +40,102 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.homeassistant.deep.ui.theme.HomeAssistantDeepIntegrationTheme
+import io.homeassistant.deep.ui.theme.AppTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
-            HomeAssistantDeepIntegrationTheme {
+            val context = LocalContext.current
+            val sharedPreferences = context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+
+            var url by remember {
+                mutableStateOf(
+                    sharedPreferences.getString(
+                        "url", ""
+                    )
+                )
+            }
+            var authToken by remember {
+                mutableStateOf(
+                    sharedPreferences.getString(
+                        "auth_token", ""
+                    )
+                )
+            }
+            var assistPipeline by remember {
+                mutableStateOf(
+                    sharedPreferences.getString(
+                        "assist_pipeline", ""
+                    )
+                )
+            }
+
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                when (key) {
+                    "url" -> url = sharedPreferences.getString("url", "")
+                    "auth_token" -> authToken = sharedPreferences.getString("auth_token", "")
+
+                    "assist_pipeline" -> assistPipeline =
+                        sharedPreferences.getString("assist_pipeline", "")
+                }
+            }
+            DisposableEffect(Unit) {
+                sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+                onDispose {
+                    sharedPreferences.unregisterOnSharedPreferenceChangeListener(
+                        listener
+                    )
+                }
+            }
+
+            AppTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(
-                            title = {
-                                Text("HomeAssistant Deep Integration")
-                            }
-                        )
+                        TopAppBar(title = {
+                            Text("HomeAssistant Deep Integration")
+                        })
                     }, modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
                     Column(modifier = Modifier.padding(innerPadding)) {
-                        val context = LocalContext.current
-                        val sharedPreferences =
-                            context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
-
                         Row(
                             modifier = Modifier
                                 .padding(16.dp)
                                 .fillMaxWidth()
                         ) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    startActivity(
-                                        Intent(
-                                            this@MainActivity,
-                                            ConfigActivity::class.java
-                                        )
+                            Button(modifier = Modifier.weight(1f), onClick = {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, ConfigActivity::class.java
                                     )
-                                }
-                            ) {
+                                )
+                            }) {
                                 Text("Configure")
                             }
                         }
 
-                        if (sharedPreferences.getString(
-                                "url",
-                                ""
-                            ) != "" && sharedPreferences.getString("auth_token", "") != ""
-                        ) {
+                        if (url != "" && authToken != "") {
                             var remoteMediaPlayer by remember { mutableStateOf(false) }
-                            SettingsItem(
-                                headlineContent = { Text("Create remote media player") },
+                            SettingsItem(headlineContent = { Text("Create remote media player") },
                                 overlineContent = { Text("Create a media player on HomeAssistant") },
                                 supportingContent = { Text("This will allow HomeAssistant to control this device's media playback") },
                                 leadingContent = {
                                     Icon(
-                                        Icons.Default.Favorite,
-                                        contentDescription = null
+                                        Icons.Default.Favorite, contentDescription = null
                                     )
                                 },
                                 checked = remoteMediaPlayer,
-                                onCheckedChange = { remoteMediaPlayer = it }
-                            )
+                                onCheckedChange = { remoteMediaPlayer = it })
                             var localMediaPlayer by remember { mutableStateOf(false) }
-                            SettingsItem(
-                                headlineContent = { Text("Create local media player") },
+                            SettingsItem(headlineContent = { Text("Create local media player") },
                                 overlineContent = { Text("Create a media player on this device") },
                                 supportingContent = { Text("This will allow this device to control HomeAssistant media playback") },
                                 leadingContent = {
                                     Icon(
-                                        Icons.Default.Favorite,
-                                        contentDescription = null
+                                        Icons.Default.Favorite, contentDescription = null
                                     )
                                 },
                                 checked = localMediaPlayer,
@@ -133,56 +159,44 @@ class MainActivity : ComponentActivity() {
                                             )
                                         )
                                     }
-                                }
-                            )
+                                })
                             var localCalendar by remember { mutableStateOf(false) }
-                            SettingsItem(
-                                headlineContent = { Text("Create local calendar") },
+                            SettingsItem(headlineContent = { Text("Create local calendar") },
                                 overlineContent = { Text("Create a calendar on this device") },
                                 supportingContent = { Text("This will allow this device to interact with HomeAssistant calendars") },
                                 leadingContent = {
                                     Icon(
-                                        Icons.Default.DateRange,
-                                        contentDescription = null
+                                        Icons.Default.DateRange, contentDescription = null
                                     )
                                 },
                                 checked = localCalendar,
-                                onCheckedChange = { localCalendar = it }
-                            )
+                                onCheckedChange = { localCalendar = it })
 
-                            if (sharedPreferences.getString("assist_pipeline", "") != "") {
-                                ListItem(
-                                    headlineContent = { Text("Assist") },
-                                    leadingContent = {
-                                        Icon(
-                                            Icons.Default.Face,
-                                            contentDescription = null
+                            if (assistPipeline != "") {
+                                ListItem(headlineContent = { Text("Assist") }, leadingContent = {
+                                    Icon(
+                                        Icons.Default.Face, contentDescription = null
+                                    )
+                                }, modifier = Modifier.clickable {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity, AssistActivity::class.java
                                         )
-                                    },
-                                    modifier = Modifier.clickable {
+                                    )
+                                }, trailingContent = {
+                                    FilledIconButton(onClick = {
                                         startActivity(
                                             Intent(
-                                                this@MainActivity,
-                                                AssistActivity::class.java
+                                                this@MainActivity, AssistActivity::class.java
                                             )
                                         )
-                                    },
-                                    trailingContent = {
-                                        FilledIconButton(onClick = {
-                                            startActivity(
-                                                Intent(
-                                                    this@MainActivity,
-                                                    AssistActivity::class.java
-                                                )
-                                            )
-                                        }) {
-                                            Icon(
-                                                Icons.AutoMirrored.Filled.Send,
-                                                contentDescription = null
-                                            )
-                                        }
+                                    }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = null
+                                        )
                                     }
-                                )
+                                })
                             }
                         }
                     }
@@ -207,8 +221,7 @@ fun SettingsItem(
     checked: Boolean = false,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    ListItem(
-        headlineContent = headlineContent,
+    ListItem(headlineContent = headlineContent,
         modifier = modifier.clickable(enabled = enabled, role = Role.Switch) {
             onCheckedChange(!checked)
         },
@@ -220,10 +233,7 @@ fun SettingsItem(
         shadowElevation = shadowElevation,
         trailingContent = {
             Switch(
-                checked = checked,
-                onCheckedChange = { onCheckedChange(it) },
-                enabled = enabled
+                checked = checked, onCheckedChange = { onCheckedChange(it) }, enabled = enabled
             )
-        }
-    )
+        })
 }

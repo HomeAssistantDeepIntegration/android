@@ -44,7 +44,7 @@ jobs:
     - name: Build APK
       run: ./gradlew assembleRelease
 
-    - name: Upload APK to release
+    - name: Upload :app APK to release
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -52,4 +52,14 @@ jobs:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: app/build/outputs/apk/release/app-release-unsigned.apk
         asset_name: app-release.apk
+        asset_content_type: application/vnd.android.package-archive
+
+    - name: Upload :wear APK to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: wear/build/outputs/apk/release/wear-release-unsigned.apk
+        asset_name: wear-release.apk
         asset_content_type: application/vnd.android.package-archive

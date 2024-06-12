@@ -1,5 +1,9 @@
 # A more integrated Android app for HomeAssistant
 
+[![Android CI](https://github.com/JosephAbbey/HomeAssistantDeepIntegration/actions/workflows/android.yml/badge.svg)](https://github.com/JosephAbbey/HomeAssistantDeepIntegration/actions/workflows/android.yml)
+![GitHub Release](https://img.shields.io/github/v/release/JosephAbbey/HomeAssistantDeepIntegration?include_prereleases&label=pre-release)
+![GitHub Release](https://img.shields.io/github/v/release/JosephAbbey/HomeAssistantDeepIntegration)
+
 This is not a replacement for the HomeAssistant Android app, it just adds more features to your phone, linked to HomeAssistant.
 
 Here are the main areas I am working on:

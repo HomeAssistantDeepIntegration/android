@@ -7,11 +7,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
     <queries>
         <intent>
-            <action
-                android:name="android.speech.RecognitionService" />
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -24,6 +25,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.HomeAssistantDeepIntegration"
+        android:name=".DeepApplication"
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"
@@ -61,11 +63,71 @@
 
         <service
             android:name=".LocalMediaPlayerService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="false">
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
             <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService"/>
+                <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
+        </service>
+
+        <activity
+            android:name=".CalendarActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HomeAssistantDeepIntegration">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".EntitiesActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HomeAssistantDeepIntegration">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MapActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HomeAssistantDeepIntegration">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".TodosActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HomeAssistantDeepIntegration">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".AuthenticatorService"
+            android:exported="true"
+            android:permission="android.permission.BIND_AUTOFILL">
+            <intent-filter>
+                <action android:name="android.accounts.AccountAuthenticator" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accounts.AccountAuthenticator"
+                android:resource="@xml/authenticator" />
+        </service>
+
+        <service
+            android:name=".CalendarSyncService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SYNC_ADAPTER">
+            <intent-filter>
+                <action android:name="android.content.SyncAdapter" />
+            </intent-filter>
+            <meta-data
+                android:name="android.content.SyncAdapter"
+                android:resource="@xml/syncadapter" />
         </service>
 
     </application>

@@ -2,6 +2,7 @@ package io.homeassistant.deep.shared
 
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -48,21 +49,21 @@ class ConversationViewModel(
             Log.d(TAG, message.toString())
 
             when (message) {
-                is io.homeassistant.deep.shared.AuthRequiredSocketMessage -> {
-                    service.sendMessage(io.homeassistant.deep.shared.AuthSocketMessage(this@ConversationViewModel.authToken))
+                is AuthRequiredSocketMessage -> {
+                    service.sendMessage(AuthSocketMessage(this@ConversationViewModel.authToken))
                 }
 
-                is io.homeassistant.deep.shared.AuthOkSocketMessage -> {
+                is AuthOkSocketMessage -> {
                     _connectionStatus = ConnectionStatus.OPENED
                 }
 
-                is io.homeassistant.deep.shared.AuthInvalidSocketMessage -> {
+                is AuthInvalidSocketMessage -> {
                     _connectionStatus = ConnectionStatus.AUTHENTICATION_FAILED
                 }
 
-                is io.homeassistant.deep.shared.EventSocketMessage -> {
+                is EventSocketMessage -> {
                     when (message.event) {
-                        is io.homeassistant.deep.shared.IntentEndEvent -> {
+                        is IntentEndEvent -> {
                             conversationId = message.event.data.intentOutput.conversationId
                             _messages.add(
                                 AssistMessage(
@@ -74,13 +75,13 @@ class ConversationViewModel(
                             onResponse(message.event.data.intentOutput.response.speech.plain.speech)
                         }
 
-                        is io.homeassistant.deep.shared.UnknownEvent -> {
+                        is UnknownEvent -> {
                             Log.w(TAG, "Unknown event received")
                         }
                     }
                 }
 
-                is io.homeassistant.deep.shared.UnknownSocketMessage -> {
+                is UnknownSocketMessage -> {
                     Log.w(TAG, "Unknown message type received")
                 }
 
@@ -99,7 +100,7 @@ class ConversationViewModel(
     val messages: List<AssistMessage>
         get() = _messages
 
-    private var _responding by mutableStateOf(0)
+    private var _responding by mutableIntStateOf(0)
     val responding: Int
         get() = _responding
 
@@ -107,11 +108,11 @@ class ConversationViewModel(
         _messages.add(AssistMessage(content, true))
         _responding++
         service.sendMessage(
-            io.homeassistant.deep.shared.AssistPipelineRunSocketMessage(
+            AssistPipelineRunSocketMessage(
                 id = id++,
                 startStage = "intent",
                 endStage = "intent",
-                input = io.homeassistant.deep.shared.AssistPipelineRunSocketMessage.Input(text = content),
+                input = AssistPipelineRunSocketMessage.Input(text = content),
                 pipeline = assistPipeline,
                 conversationId = conversationId
             )

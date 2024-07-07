@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -73,14 +76,49 @@ class MainActivity : ComponentActivity() {
                     )
                 )
             }
+            var remoteMediaPlayer by remember {
+                mutableStateOf(
+                    sharedPreferences.getBoolean(
+                        "remote_media_player",
+                        false
+                    )
+                )
+            }
+            var localMediaPlayer by remember {
+                mutableStateOf(
+                    sharedPreferences.getBoolean(
+                        "local_media_player",
+                        false
+                    )
+                )
+            }
+            var localCalendar by remember {
+                mutableStateOf(
+                    sharedPreferences.getBoolean(
+                        "local_calendar",
+                        false
+                    )
+                )
+            }
 
             val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                 when (key) {
                     "url" -> url = sharedPreferences.getString("url", "")
                     "auth_token" -> authToken = sharedPreferences.getString("auth_token", "")
-
                     "assist_pipeline" -> assistPipeline =
                         sharedPreferences.getString("assist_pipeline", "")
+
+                    "remote_media_player" -> remoteMediaPlayer = sharedPreferences.getBoolean(
+                        "remote_media_player", false
+                    )
+
+                    "local_media_player" -> localMediaPlayer = sharedPreferences.getBoolean(
+                        "local_media_player", false
+                    )
+
+                    "local_calendar" -> localCalendar = sharedPreferences.getBoolean(
+                        "local_calendar", false
+                    )
                 }
             }
             DisposableEffect(Unit) {
@@ -118,7 +156,78 @@ class MainActivity : ComponentActivity() {
                         }
 
                         if (url != "" && authToken != "") {
-                            var remoteMediaPlayer by remember { mutableStateOf(false) }
+                            ListItem(headlineContent = { Text("Entities") }, leadingContent = {
+                                Icon(
+                                    Icons.Default.Favorite, contentDescription = null
+                                )
+                            }, modifier = Modifier.clickable {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, EntitiesActivity::class.java
+                                    )
+                                )
+                            }, trailingContent = {
+                                FilledIconButton(onClick = {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity, EntitiesActivity::class.java
+                                        )
+                                    )
+                                }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null
+                                    )
+                                }
+                            })
+                            ListItem(headlineContent = { Text("Map") }, leadingContent = {
+                                Icon(
+                                    Icons.Default.LocationOn, contentDescription = null
+                                )
+                            }, modifier = Modifier.clickable {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, MapActivity::class.java
+                                    )
+                                )
+                            }, trailingContent = {
+                                FilledIconButton(onClick = {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity, MapActivity::class.java
+                                        )
+                                    )
+                                }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null
+                                    )
+                                }
+                            })
+                            ListItem(headlineContent = { Text("Todos") }, leadingContent = {
+                                Icon(
+                                    Icons.Default.CheckCircle, contentDescription = null
+                                )
+                            }, modifier = Modifier.clickable {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, TodosActivity::class.java
+                                    )
+                                )
+                            }, trailingContent = {
+                                FilledIconButton(onClick = {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity, TodosActivity::class.java
+                                        )
+                                    )
+                                }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null
+                                    )
+                                }
+                            })
                             SettingsItem(headlineContent = { Text("Create remote media player") },
                                 overlineContent = { Text("Create a media player on HomeAssistant") },
                                 supportingContent = { Text("This will allow HomeAssistant to control this device's media playback") },
@@ -128,8 +237,13 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 checked = remoteMediaPlayer,
-                                onCheckedChange = { remoteMediaPlayer = it })
-                            var localMediaPlayer by remember { mutableStateOf(false) }
+                                onCheckedChange = {
+                                    remoteMediaPlayer = it
+                                    with(sharedPreferences.edit()) {
+                                        putBoolean("remote_media_player", it)
+                                        apply()
+                                    }
+                                })
                             SettingsItem(headlineContent = { Text("Create local media player") },
                                 overlineContent = { Text("Create a media player on this device") },
                                 supportingContent = { Text("This will allow this device to control HomeAssistant media playback") },
@@ -141,6 +255,10 @@ class MainActivity : ComponentActivity() {
                                 checked = localMediaPlayer,
                                 onCheckedChange = {
                                     localMediaPlayer = it
+                                    with(sharedPreferences.edit()) {
+                                        putBoolean("local_media_player", it)
+                                        apply()
+                                    }
                                     // Create the service when the user enables the setting
                                     if (it) {
                                         // Start the service
@@ -160,7 +278,6 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 })
-                            var localCalendar by remember { mutableStateOf(false) }
                             SettingsItem(headlineContent = { Text("Create local calendar") },
                                 overlineContent = { Text("Create a calendar on this device") },
                                 supportingContent = { Text("This will allow this device to interact with HomeAssistant calendars") },
@@ -170,7 +287,39 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 checked = localCalendar,
-                                onCheckedChange = { localCalendar = it })
+                                onCheckedChange = {
+                                    localCalendar = it
+                                    with(sharedPreferences.edit()) {
+                                        putBoolean("local_calendar", it)
+                                        apply()
+                                    }
+                                })
+                            if (localCalendar) {
+                                ListItem(headlineContent = { Text("Calendar") }, leadingContent = {
+                                    Icon(
+                                        Icons.Default.DateRange, contentDescription = null
+                                    )
+                                }, modifier = Modifier.clickable {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity, CalendarActivity::class.java
+                                        )
+                                    )
+                                }, trailingContent = {
+                                    FilledIconButton(onClick = {
+                                        startActivity(
+                                            Intent(
+                                                this@MainActivity, CalendarActivity::class.java
+                                            )
+                                        )
+                                    }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null
+                                        )
+                                    }
+                                })
+                            }
 
                             if (assistPipeline != "") {
                                 ListItem(headlineContent = { Text("Assist") }, leadingContent = {

@@ -1,5 +1,6 @@
 package io.homeassistant.deep
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -8,6 +9,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,12 +24,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,9 +41,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -49,12 +57,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,12 +79,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
-import io.homeassistant.deep.shared.AssistMessage
-import io.homeassistant.deep.shared.ConnectionStatus
-import io.homeassistant.deep.shared.ConversationViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cheonjaeung.compose.grid.GridScope
+import com.cheonjaeung.compose.grid.SimpleGridCells
+import com.cheonjaeung.compose.grid.VerticalGrid
 import io.homeassistant.deep.ui.theme.AppTheme
 
 class AssistActivity : ComponentActivity() {
@@ -84,97 +92,144 @@ class AssistActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            AppTheme {
-                ModalBottomSheet(
-                    onDismissRequest = { this.finish() },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    windowInsets = BottomSheetDefaults.windowInsets,
-                    modifier = Modifier.imePadding()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = with(LocalConfiguration.current) { screenHeightDp.dp * 0.1f },
-                                max = with(LocalConfiguration.current) { screenHeightDp.dp * 0.6f })
-                            .padding(16.dp), verticalArrangement = Arrangement.Bottom
+            val context = LocalContext.current
+            val sharedPreferences = context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+
+            val url = sharedPreferences.getString(
+                "url", ""
+            )
+            val token = sharedPreferences.getString(
+                "auth_token", ""
+            )
+            val conversationId = sharedPreferences.getString(
+                "conversation_id", ""
+            )
+            val deviceId = sharedPreferences.getString(
+                "device_id", null
+            )
+
+            if (url.isNullOrEmpty() || token.isNullOrEmpty() || conversationId.isNullOrEmpty()) {
+                // Navigate to the configuration activity
+                startActivity(
+                    Intent(
+                        this@AssistActivity, ConfigActivity::class.java
+                    )
+                )
+            } else {
+                val tts = TextToSpeech(context) {}
+                DisposableEffect(Unit) {
+                    onDispose {
+                        tts.shutdown()
+                    }
+                }
+
+                val repository = HomeAssistantRepository(url, token)
+                val viewModel: HomeAssistantViewModel = viewModel(
+                    factory = HomeAssistantViewModelFactory(repository)
+                )
+                val conversationViewModel: ConversationViewModel =
+                    viewModel(factory = ConversationViewModelFactory(
+                        repository, deviceId
+                    ) { response, voice ->
+                        viewModel.loadStates()
+                        if (voice) {
+                            tts.speak(
+                                response, TextToSpeech.QUEUE_FLUSH, null, "utteranceId"
+                            )
+                        }
+                    })
+
+                AppTheme {
+                    val states by viewModel.statesLiveData.observeAsState()
+
+                    LaunchedEffect(Unit) {
+                        viewModel.loadStates()
+                    }
+
+                    ModalBottomSheet(
+                        onDismissRequest = { this.finish() },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        windowInsets = BottomSheetDefaults.windowInsets,
+                        modifier = Modifier.imePadding()
                     ) {
-                        val context = LocalContext.current
-                        val sharedPreferences =
-                            context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
-
-                        val tts = TextToSpeech(context) {}
-                        DisposableEffect(Unit) {
-                            onDispose {
-                                tts.shutdown()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = with(LocalConfiguration.current) { screenHeightDp.dp * 0.1f },
+                                    max = with(LocalConfiguration.current) { screenHeightDp.dp * 0.6f })
+                                .padding(16.dp), verticalArrangement = Arrangement.Bottom
+                        ) {
+                            var agent by remember { mutableStateOf<EntityState?>(null) }
+                            LaunchedEffect(states) {
+                                if (agent == null) agent =
+                                    states?.find { it.entityId == conversationId }
                             }
-                        }
 
-                        val conversation = remember {
-                            ConversationViewModel(sharedPreferences.getString("url", "") ?: "",
-                                sharedPreferences.getString("auth_token", "") ?: "",
-                                sharedPreferences.getString("assist_pipeline", "") ?: "",
-                                onResponse = { response ->
-                                    tts.speak(
-                                        response, TextToSpeech.QUEUE_FLUSH, null, "utteranceId"
+                            val scrollState = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .verticalScroll(
+                                        state = scrollState, enabled = true, reverseScrolling = true
                                     )
-                                })
-                        }
+                                    .weight(1f)
+                            ) {
+//                                val conversationEntities by remember {
+//                                    derivedStateOf {
+//                                        states?.filter { it.entityId.startsWith("conversation.") }
+//                                    }
+//                                }
+//                                LazyRow {
+//                                    item {
+//                                        Spacer(
+//                                            modifier = Modifier.width(24.dp)
+//                                        )
+//                                    }
+//                                    if (conversationEntities != null) {
+//                                        items(conversationEntities!!) {
+//                                            FilterChip(
+//                                                selected = it.entityId == agent?.entityId,
+//                                                onClick = {
+//                                                    agent = it
+//                                                },
+//                                                leadingIcon = {
+//                                                    Icon(
+//                                                        rememberIconicsPainter(
+//                                                            getStateIcon(it)
+//                                                        ),
+//                                                        it.attributes["friendly_name"] as String?
+//                                                            ?: it.entityId
+//                                                    )
+//                                                },
+//                                                label = {
+//                                                    Text(
+//                                                        text = it.attributes["friendly_name"] as String?
+//                                                            ?: it.entityId
+//                                                    )
+//                                                },
+//                                                modifier = Modifier.padding(
+//                                                    horizontal = 8.dp,
+//                                                )
+//                                            )
+//                                        }
+//                                    }
+//                                }
 
-                        when (conversation.connectionStatus) {
-                            ConnectionStatus.NOT_STARTED -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text("Not started")
+                                if (!states.isNullOrEmpty()) {
+                                    conversationViewModel.messages.forEach { message ->
+                                        MessageBubble(viewModel, states!!, message)
+                                    }
+                                }
+                                if (conversationViewModel.responding) {
+                                    RespondingMessageBubble(agent)
+                                }
+                                LaunchedEffect(conversationViewModel.messages) {
+                                    scrollState.animateScrollTo(scrollState.maxValue)
                                 }
                             }
 
-                            ConnectionStatus.OPENED -> {
-                                val scrollState = rememberScrollState()
-                                Column(
-                                    modifier = Modifier
-                                        .verticalScroll(
-                                            state = scrollState,
-                                            enabled = true,
-                                            reverseScrolling = true
-                                        )
-                                        .weight(1f)
-                                ) {
-                                    conversation.messages.forEach { message ->
-                                        MessageBubble(message)
-                                    }
-                                    if (conversation.responding > 0) {
-                                        RespondingMessageBubble()
-                                    }
-                                    LaunchedEffect(conversation.messages) {
-                                        scrollState.animateScrollTo(scrollState.maxValue)
-                                    }
-                                }
-
-                                InputRow(onSend = {
-                                    conversation.sendMessage(it)
-                                })
-                            }
-
-                            ConnectionStatus.CLOSED -> Failed("Connection closed.",
-                                conversation,
-                                onCancel = { this@AssistActivity.finish() })
-
-                            ConnectionStatus.CONNECTING -> Loading("Connecting...")
-
-                            ConnectionStatus.CLOSING -> Loading("Closing...")
-
-                            ConnectionStatus.FAILED -> Failed(conversation = conversation,
-                                onCancel = { this@AssistActivity.finish() })
-
-                            ConnectionStatus.AUTHENTICATING -> Loading("Authenticating...")
-
-                            ConnectionStatus.AUTHENTICATION_FAILED -> Failed("Authentication failed.",
-                                conversation,
-                                onCancel = { this@AssistActivity.finish() })
+                            InputRow(onSend = { message, voice ->
+                                agent?.let { conversationViewModel.sendMessage(message, voice, it) }
+                            })
                         }
                     }
                 }
@@ -208,41 +263,10 @@ fun LoadingPreview() {
 }
 
 @Composable
-fun Failed(
-    text: String = "Failed to connect", conversation: ConversationViewModel, onCancel: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text)
-        Button(onClick = { conversation.observeConnection() }) {
-            Text("Retry")
-        }
-        Button(onClick = { onCancel() }) {
-            Text("Cancel")
-        }
-    }
-}
-
-@Preview(uiMode = UI_MODE_NIGHT_YES)
-@Composable
-fun FailedPreview() {
-    AppTheme {
-        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-            Failed(conversation = ConversationViewModel("", "", "", onResponse = {}), onCancel = {})
-        }
-    }
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
 fun InputRow(
-    onSend: (String) -> Unit, modifier: Modifier = Modifier
+    onSend: (String, Boolean) -> Unit, modifier: Modifier = Modifier
 ) {
-    RequiresPermission(permission = android.Manifest.permission.RECORD_AUDIO) { isMicrophoneGranted, requestMicrophonePermission ->
+    RequiresPermission(permission = Manifest.permission.RECORD_AUDIO) { isMicrophoneGranted, requestMicrophonePermission ->
         var voice by remember { mutableStateOf(isMicrophoneGranted) }
 
         if (voice) {
@@ -290,11 +314,11 @@ fun VoiceInputRowContent(
             Spacer(modifier = Modifier.width(48.dp))
             if (listening) {
                 PulsingIconButton(onClick = stopListening) {
-                    Icon(Icons.Default.Face, contentDescription = null)
+                    Icon(Icons.Default.Mic, contentDescription = null)
                 }
             } else {
                 FilledTonalIconButton(onClick = startListening) {
-                    Icon(Icons.Default.Face, contentDescription = null)
+                    Icon(Icons.Default.Mic, contentDescription = null)
                 }
             }
             IconButton(onClick = onDeactivateVoice) {
@@ -307,7 +331,7 @@ fun VoiceInputRowContent(
 @Composable
 fun VoiceInputRow(
     isMicrophoneGranted: Boolean,
-    onSend: (String) -> Unit,
+    onSend: (String, Boolean) -> Unit,
     modifier: Modifier,
     deactivateVoice: () -> Unit,
     requestMicrophonePermission: () -> Unit
@@ -354,7 +378,7 @@ fun VoiceInputRow(
                     recognizedText = matches?.get(0) ?: ""
                     listening = false
                     if (recognizedText.isNotEmpty()) {
-                        onSend(recognizedText)
+                        onSend(recognizedText, true)
                         recognizedText = ""
                     }
                 }
@@ -365,7 +389,9 @@ fun VoiceInputRow(
                     recognizedText = matches?.get(0) ?: ""
                 }
 
-                override fun onEvent(eventType: Int, params: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {
+                    Log.d("RecognitionListener", "onEvent: $eventType")
+                }
             }
 
             speechRecognizer.setRecognitionListener(listener)
@@ -444,7 +470,7 @@ fun VoiceInputRowListeningPreview() {
 @Composable
 private fun TextInputRow(
     modifier: Modifier,
-    onSend: (String) -> Unit,
+    onSend: (String, Boolean) -> Unit,
     activateVoice: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
@@ -457,7 +483,8 @@ private fun TextInputRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        OutlinedTextField(value = input,
+        OutlinedTextField(
+            value = input,
             onValueChange = {
                 input = it
             },
@@ -470,7 +497,7 @@ private fun TextInputRow(
                 if (input.isEmpty()) return@KeyboardActions
                 val message = input
                 input = ""
-                onSend(message)
+                onSend(message, false)
             })
         )
         if (input.isNotEmpty()) {
@@ -478,13 +505,13 @@ private fun TextInputRow(
                 if (input.isEmpty()) return@FilledIconButton
                 val message = input
                 input = ""
-                onSend(message)
+                onSend(message, false)
             }) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
             }
         } else {
             FilledIconButton(modifier = Modifier.padding(bottom = 4.dp), onClick = activateVoice) {
-                Icon(Icons.Default.Face, contentDescription = null)
+                Icon(Icons.Default.Mic, contentDescription = null)
             }
         }
 
@@ -499,22 +526,9 @@ private fun TextInputRow(
 fun TextInputRowPreview() {
     AppTheme {
         Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-            TextInputRow(modifier = Modifier, onSend = {}, activateVoice = {})
+            TextInputRow(modifier = Modifier, onSend = { _, _ -> }, activateVoice = {})
         }
     }
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-fun RequiresPermission(
-    permission: String,
-    content: @Composable (isGranted: Boolean, requestPermission: () -> Unit) -> Unit
-) {
-    val permissionState = rememberPermissionState(
-        permission
-    )
-
-    content(permissionState.status.isGranted) { permissionState.launchPermissionRequest() }
 }
 
 @Composable
@@ -562,23 +576,231 @@ fun PulsingIconButtonPreview() {
     AppTheme {
         Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
             PulsingIconButton(onClick = {}) {
-                Icon(Icons.Default.Face, contentDescription = null)
+                Icon(Icons.Default.Mic, contentDescription = null)
             }
         }
     }
 }
 
 @Composable
-fun MessageBubble(message: AssistMessage) {
+fun GridScope.EntityTile(
+    viewModel: HomeAssistantViewModel, states: List<EntityState>, target: ConversationTarget
+) {
+    val entity = states.find { it.entityId == target.id }
+
+    if (entity != null) {
+        when (entity.entityId.split(".").first()) {
+            "light", "switch" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                        containerColor = if (entity.state != "on") MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (entity.state != "on") MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onPrimaryContainer,
+                    ), onClick = {
+                        viewModel.toggleEntity(entity.entityId)
+                    }, enabled = entity.state != "unavailable", modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                rememberIconicsPainter(
+                                    getStateIcon(entity)
+                                ), target.name, modifier = Modifier.fillMaxHeight()
+                            )
+
+                            Switch(
+                                checked = entity.state == "on", onCheckedChange = {
+                                    viewModel.toggleEntity(entity.entityId)
+                                }, enabled = entity.state != "unavailable"
+                            )
+                        }
+                        Text(text = target.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+
+            "binary_sensor" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (entity.state != "on") MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (entity.state != "on") MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                    onClick = { },
+                    enabled = entity.state != "unavailable",
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Icon(
+                                rememberIconicsPainter(
+                                    getStateIcon(entity)
+                                ), target.name
+                            )
+                        }
+                        Text(text = target.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+
+            "sensor" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                    onClick = { },
+                    enabled = entity.state != "unavailable",
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Icon(
+                                rememberIconicsPainter(
+                                    getStateIcon(entity)
+                                ), target.name
+                            )
+                        }
+                        Text(text = target.name, modifier = Modifier.fillMaxWidth())
+
+                        val unit = entity.attributes["unit_of_measurement"] as String?
+                        if (unit.isNullOrBlank()) {
+                            Text(text = entity.state, modifier = Modifier.fillMaxWidth())
+                        } else {
+                            Text(text = "${entity.state} $unit", modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            }
+
+            "person", "device_tracker" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                        containerColor = if (entity.state != "on") MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (entity.state != "on") MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onPrimaryContainer,
+                    ), modifier = Modifier
+                        .span(2)
+                        .aspectRatio(1f)
+                ) {
+                    Map(
+                        viewModel.repository.url,
+                        states,
+                        focusedState = entity,
+                    )
+                }
+            }
+
+            "conversation" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ), modifier = Modifier.span(2)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            tonalElevation = 2.dp,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Icon(
+                                rememberIconicsPainter(
+                                    getStateIcon(entity)
+                                ),
+                                target.name,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                        Text(text = target.name, modifier = Modifier.padding(16.dp))
+                    }
+                }
+            }
+
+            else -> {}
+        }
+    }
+}
+
+@Composable
+fun ErrorCard(
+    code: ConversationErrorCode?
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+        ), modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = when (code) {
+                    null -> "Unknown error"
+                    ConversationErrorCode.NO_INTENT_MATCH -> "No intent matched"
+                    ConversationErrorCode.NO_VALID_TARGETS -> "No valid targets"
+                    ConversationErrorCode.FAILED_TO_HANDLE -> "Failed to handle"
+                    ConversationErrorCode.TIMER_NOT_FOUND_RESPONSE -> "Timer not found"
+                    ConversationErrorCode.MULTIPLE_TIMERS_MATCHED_RESPONSE -> "Multiple timers matched"
+                    ConversationErrorCode.NO_TIMER_SUPPORT_RESPONSE -> "No timer support"
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun MessageBubble(
+    viewModel: HomeAssistantViewModel, states: List<EntityState>, message: AssistMessage
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = if (message.isUserMessage) Arrangement.End else Arrangement.Start
     ) {
+//        if (!message.isUserMessage && message.agent != null) {
+//            Column(
+//                modifier = Modifier
+//                    .fillMaxHeight()
+//                    .padding(end = 8.dp),
+//                verticalArrangement = Arrangement.Bottom
+//            ) {
+//                Surface(
+//                    shape = CircleShape,
+//                    tonalElevation = 2.dp
+//                ) {
+//                    Icon(
+//                        rememberIconicsPainter(
+//                            getStateIcon(message.agent)
+//                        ),
+//                        message.agent.attributes["friendly_name"] as String?,
+//                        modifier = Modifier.padding(8.dp),
+//                    )
+//                }
+//            }
+//        }
         Surface(
-            color = if (message.isUserMessage) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = if (message.isUserMessage) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+            color = if (message.isError) MaterialTheme.colorScheme.errorContainer else if (message.isUserMessage) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = if (message.isError) MaterialTheme.colorScheme.onErrorContainer else if (message.isUserMessage) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
             shape = RoundedCornerShape(
                 topStart = if (message.isUserMessage) 16.dp else 0.dp,
                 topEnd = if (message.isUserMessage) 0.dp else 16.dp,
@@ -590,19 +812,62 @@ fun MessageBubble(message: AssistMessage) {
                 modifier = Modifier.padding(10.dp)
             ) {
                 Text(text = message.content)
+                if (message.isError && message.data != null) {
+                    Spacer(modifier = Modifier.heightIn(8.dp))
+                    ErrorCard(message.data.code)
+                }
+                if (!message.data?.success.isNullOrEmpty()) {
+                    Spacer(modifier = Modifier.heightIn(8.dp))
+                    VerticalGrid(
+                        columns = SimpleGridCells.Adaptive(minSize = 128.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        message.data!!.success!!.forEach {
+                            when (it.type) {
+                                ConversationTargetType.ENTITY -> {
+                                    EntityTile(viewModel, states, it)
+                                }
+
+                                else -> {}
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun RespondingMessageBubble() {
+fun RespondingMessageBubble(agent: EntityState? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.Start
     ) {
+//        if (agent != null) {
+//            Column(
+//                modifier = Modifier
+//                    .fillMaxHeight()
+//                    .padding(end = 8.dp),
+//                verticalArrangement = Arrangement.Bottom
+//            ) {
+//                Surface(
+//                    shape = CircleShape,
+//                    tonalElevation = 2.dp
+//                ) {
+//                    Icon(
+//                        rememberIconicsPainter(
+//                            getStateIcon(agent)
+//                        ),
+//                        agent.attributes["friendly_name"] as String?,
+//                        modifier = Modifier.padding(8.dp),
+//                    )
+//                }
+//            }
+//        }
         Surface(
             color = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -619,19 +884,19 @@ fun RespondingMessageBubble() {
     }
 }
 
-@Preview(uiMode = UI_MODE_NIGHT_YES)
-@Composable
-fun MessageBubblesPreview() {
-    AppTheme {
-        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-            Column(
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                MessageBubble(AssistMessage(content = "Hello", isUserMessage = true))
-                MessageBubble(AssistMessage(content = "How can I help you?", isUserMessage = false))
-                RespondingMessageBubble()
-            }
-        }
-    }
-}
+//@Preview(uiMode = UI_MODE_NIGHT_YES)
+//@Composable
+//fun MessageBubblesPreview() {
+//    AppTheme {
+//        Surface(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+//            Column(
+//                modifier = Modifier.padding(vertical = 4.dp)
+//            ) {
+//                MessageBubble(AssistMessage(content = "Hello", isUserMessage = true))
+//                MessageBubble(AssistMessage(content = "How can I help you?", isUserMessage = false))
+//                RespondingMessageBubble()
+//            }
+//        }
+//    }
+//}
 

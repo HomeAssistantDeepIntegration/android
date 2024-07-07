@@ -220,7 +220,9 @@ class AssistActivity : ComponentActivity() {
                                     }
                                 }
                                 if (conversationViewModel.responding) {
-                                    RespondingMessageBubble(agent)
+                                    RespondingMessageBubble(
+//                                        agent
+                                    )
                                 }
                                 LaunchedEffect(conversationViewModel.messages) {
                                     scrollState.animateScrollTo(scrollState.maxValue)
@@ -840,7 +842,9 @@ fun MessageBubble(
 }
 
 @Composable
-fun RespondingMessageBubble(agent: EntityState? = null) {
+fun RespondingMessageBubble(
+//    agent: EntityState? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
